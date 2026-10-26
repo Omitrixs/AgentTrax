@@ -21,7 +21,7 @@ The initial project specification and approved decisions are documented. The rep
 | Feature | Status | Evidence / notes |
 |---|---|---|
 | AT-00 Project specification | Approved | Simulator-first MVP, initial stack, CLI-first approach, order-management demo, and in-memory-first trace storage approved and recorded |
-| AT-01 Repository and environment baseline | In progress | Baseline commit `18310f7` and clean Git state verified. Setup instructions, smoke test, and lint checks still need verification |
+| AT-01 Repository and environment baseline | In progress | Python 3.12.10 and project-local `.venv` verified; pinned development dependencies recorded in `requirements-dev.txt`; smoke test passes (1 test); Ruff passes; README setup instructions added. Fresh-checkout setup and final Git verification remain |
 | AT-02 Core contracts | Not started | Typed action, decision, execution, verification, and trace models |
 | AT-03 Deterministic scenario simulator | Not started | One scenario, explicit state and success conditions |
 | AT-04 Policy engine | Not started | Pure allow/block/approval decision logic |
@@ -37,7 +37,7 @@ The initial project specification and approved decisions are documented. The rep
 
 ## In Progress
 
-- AT-01: Verify the environment, setup instructions, smoke test, and lint configuration.
+- AT-01: Verify setup from a clean checkout, review the final baseline diff, and commit the verified configuration.
 
 ## Completed
 
