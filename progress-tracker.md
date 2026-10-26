@@ -4,62 +4,64 @@ Update this file whenever the active feature, implementation status, or an archi
 
 ## Current Phase
 
-- Phase 0: Project specification and scope definition.
+- Phase 0: Project specification and repository baseline.
 
 ## Current Goal
 
-- Review and approve the context files.
-- Inspect the actual repository before claiming any implementation is complete.
-- Establish a minimal, reproducible project baseline.
+- Record the approved initial scope and development decisions.
+- Verify the Python environment and development tooling.
+- Complete the remaining AT-01 acceptance criteria before implementing core contracts.
 
 ## Project status
 
-No AgentTrax implementation status is assumed by this document. Mark a feature complete only after inspecting the repository and running the required checks.
+The initial project specification and approved decisions are documented. The repository baseline and decision records are committed to Git. No application code or implemented product features have been confirmed yet.
 
 ## Feature status
 
 | Feature | Status | Evidence / notes |
 |---|---|---|
-| AT-00 Project specification | In review | Context files drafted; owner approval required |
-| AT-01 Repository and environment baseline | Not started | Inspect actual files, Python version, dependencies, Git status |
-| AT-02 Core contracts | Not started | Typed action, decision, execution, verification, trace models |
+| AT-00 Project specification | Approved | Simulator-first MVP, initial stack, CLI-first approach, order-management demo, and in-memory-first trace storage approved and recorded |
+| AT-01 Repository and environment baseline | In progress | Baseline commit `18310f7` and clean Git state verified. Setup instructions, smoke test, and lint checks still need verification |
+| AT-02 Core contracts | Not started | Typed action, decision, execution, verification, and trace models |
 | AT-03 Deterministic scenario simulator | Not started | One scenario, explicit state and success conditions |
 | AT-04 Policy engine | Not started | Pure allow/block/approval decision logic |
-| AT-05 Gated tool executor | Not started | Executor refuses calls without valid allow decision |
+| AT-05 Gated tool executor | Not started | Executor refuses calls without a valid allow decision |
 | AT-06 Independent verifier | Not started | Verifies observed state and postconditions |
 | AT-07 Trace recorder | Not started | Correlated events and secret redaction |
 | AT-08 End-to-end demo workflow | Not started | Repeatable scenario showing blocked and successful actions |
-| AT-09 API layer | Not started | Thin FastAPI endpoints, if approved after core logic |
+| AT-09 API layer | Deferred | Reconsider FastAPI after the core logic |
 | AT-10 Dashboard | Not started | Focused UI for trace inspection, if time allows |
-| AT-11 Model adapter | Deferred | Mock agent remains sufficient for core tests |
+| AT-11 Model adapter | Deferred | Real model integration is optional; confirm mock-agent decision before implementation |
 | AT-12 Evaluation suite | Not started | Fixed scenarios and measurable metrics |
 | AT-13 Showcase hardening | Not started | Clean setup, documented limitations, demo script |
 
 ## In Progress
 
-- None.
+- AT-01: Verify the environment, setup instructions, smoke test, and lint configuration.
 
 ## Completed
 
-- None confirmed yet.
+- Repository baseline commit created and verified.
+- Approved initial decisions recorded in `decisions-log.md`.
 
 ## Next Up
 
-1. Confirm the repository path and inspect current files.
-2. Approve the product scope and initial stack.
-3. Implement AT-01 only.
-4. Run and record environment checks before proceeding.
+1. Inspect Python, pip, Git, and available test/lint tooling.
+2. Add only the minimal scaffolding required to satisfy AT-01.
+3. Run the smoke test and available lint checks.
+4. Record evidence and verify the AT-01 acceptance criteria.
+5. Begin AT-02 only after AT-01 is verified complete.
 
 ## Open Questions
 
-- Will the initial showcase use a CLI-only demo, a FastAPI endpoint, or a separate web dashboard?
-- Is the repository already created, and what is its current path?
-- Which Python version and package manager are installed in the target environment?
-- Is a live model API available, or should the showcase remain fully offline with a deterministic mock agent?
-- Which exact demo scenario should be the flagship: order cancellation/refund, customer-support case handling, or another simulated workflow?
+- Should the dashboard be included in the first showcase, or deferred until the core workflow is proven?
+- Should trace persistence remain in-memory for the initial demo, with SQLite considered later? Initial decision: in-memory first.
+- Should the mock-agent approach be formally accepted as an architectural decision? The real model adapter remains optional.
 
 ## Session Notes
 
-- Do not infer that planned features exist.
 - Keep the MVP simulator-only. No real-world tool side effects.
-- Update this tracker after each approved feature.
+- Do not infer that planned features exist.
+- Keep documentation aligned with verified repository state.
+- Implement one approved feature at a time.
+- Preserve existing Git history and verify changes before committing.
