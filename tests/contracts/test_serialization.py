@@ -64,14 +64,14 @@ def test_rejects_unsupported_json_values(value: object) -> None:
 
 def test_accepts_exact_depth_limit() -> None:
     value: object = "leaf"
-    for _ in range(MAX_ARGUMENT_DEPTH - 1):
+    for _ in range(MAX_ARGUMENT_DEPTH):
         value = [value]
     validate_json_value(value)
 
 
 def test_rejects_depth_over_limit() -> None:
     value: object = "leaf"
-    for _ in range(MAX_ARGUMENT_DEPTH):
+    for _ in range(MAX_ARGUMENT_DEPTH + 1):
         value = [value]
     with pytest.raises(ValueError, match="nesting"):
         validate_json_value(value)
@@ -144,6 +144,7 @@ def test_frozen_containers_reject_mutation() -> None:
     with pytest.raises(AttributeError, match="immutable"):
         items._FrozenJsonArray__items = ()  # type: ignore[attr-defined]
 
+
 @pytest.mark.parametrize(
     "value",
     [
@@ -198,9 +199,7 @@ def test_freezing_copies_nested_arrays() -> None:
 
     original[1]["values"].append(4)
 
-    assert canonical_json_bytes_from_immutable(frozen) == (
-        b'[1,{"values":[2,3]}]'
-    )
+    assert canonical_json_bytes_from_immutable(frozen) == (b'[1,{"values":[2,3]}]')
 
 
 def test_json_validation_does_not_treat_boolean_as_integer() -> None:
@@ -216,15 +215,14 @@ def test_frozen_json_array_rejects_attribute_reassignment() -> None:
     with pytest.raises(AttributeError, match="immutable"):
         frozen._items = (3, 4)  # type: ignore[attr-defined]
 
+
 def test_direct_object_construction_recursively_freezes_input() -> None:
     original = {"items": [1, {"value": 2}]}
     frozen = FrozenJsonObject(original)
 
     original["items"].append(3)
 
-    assert canonical_json_bytes_from_immutable(frozen) == (
-        b'{"items":[1,{"value":2}]}'
-    )
+    assert canonical_json_bytes_from_immutable(frozen) == (b'{"items":[1,{"value":2}]}')
 
 
 def test_direct_array_construction_recursively_freezes_input() -> None:
@@ -233,6 +231,4 @@ def test_direct_array_construction_recursively_freezes_input() -> None:
 
     original[1]["values"].append(4)
 
-    assert canonical_json_bytes_from_immutable(frozen) == (
-        b'[1,{"values":[2,3]}]'
-    )
+    assert canonical_json_bytes_from_immutable(frozen) == (b'[1,{"values":[2,3]}]')

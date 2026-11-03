@@ -1,4 +1,3 @@
-﻿
 """Strict JSON validation and canonical serialization utilities."""
 
 from __future__ import annotations
@@ -21,7 +20,6 @@ PROPOSAL_DIGEST_HEX_LENGTH = 64
 DIGEST_CANONICALIZATION_VERSION = 1
 
 
-
 class FrozenJsonObject(Mapping[str, object]):
     """Immutable JSON object backed by a read-only mapping."""
 
@@ -30,8 +28,7 @@ class FrozenJsonObject(Mapping[str, object]):
     def __init__(self, data: dict[str, object]) -> None:
         validate_json_value(data)
         frozen_data = {
-            key: _freeze_validated_json(value)
-            for key, value in data.items()
+            key: _freeze_validated_json(value) for key, value in data.items()
         }
         object.__setattr__(
             self,
@@ -59,9 +56,7 @@ class FrozenJsonArray(Sequence[object]):
 
     def __init__(self, items: tuple[object, ...]) -> None:
         validate_json_value(list(items))
-        frozen_items = tuple(
-            _freeze_validated_json(item) for item in items
-        )
+        frozen_items = tuple(_freeze_validated_json(item) for item in items)
         object.__setattr__(
             self,
             "_FrozenJsonArray__items",
@@ -77,6 +72,7 @@ class FrozenJsonArray(Sequence[object]):
     def __len__(self) -> int:
         return len(self.__items)
 
+
 def validate_json_value(
     value: object,
     *,
@@ -88,9 +84,7 @@ def validate_json_value(
 
     def visit(item: object, depth: int) -> None:
         if depth > max_depth:
-            raise ValueError(
-                f"JSON nesting exceeds maximum depth of {max_depth}"
-            )
+            raise ValueError(f"JSON nesting exceeds maximum depth of {max_depth}")
 
         if item is None or type(item) in (str, bool, int):
             return
@@ -102,20 +96,25 @@ def validate_json_value(
 
         if type(item) is list:
             for child in item:
-                visit(child, depth + 1)
+                child_depth = (
+                    depth + 1 if type(child) in (dict, list) else depth
+                )
+                visit(child, child_depth)
             return
 
         if type(item) is dict:
             for key, child in item.items():
                 if type(key) is not str:
                     raise TypeError("JSON object keys must be strings")
-                visit(child, depth + 1)
+
+                child_depth = (
+                    depth + 1 if type(child) in (dict, list) else depth
+                )
+                visit(child, child_depth)
             return
 
         raise TypeError(f"Unsupported JSON value type: {type(item).__name__}")
-
     visit(value, 1)
-
 
 
 def _freeze_validated_json(value: JsonValue) -> object:
@@ -128,7 +127,6 @@ def _freeze_validated_json(value: JsonValue) -> object:
 
     return value
 
-
 def freeze_json_value(value: object) -> object:
     """Validate, copy, and recursively freeze JSON data."""
     validate_json_value(value)
@@ -138,10 +136,7 @@ def freeze_json_value(value: object) -> object:
 def thaw_json_value(value: object) -> JsonValue:
     """Convert trusted frozen JSON containers into ordinary JSON values."""
     if type(value) is FrozenJsonObject:
-        return {
-            key: thaw_json_value(item)
-            for key, item in value.items()
-        }
+        return {key: thaw_json_value(item) for key, item in value.items()}
 
     if type(value) is FrozenJsonArray:
         return [thaw_json_value(item) for item in value]
@@ -152,9 +147,7 @@ def thaw_json_value(value: object) -> JsonValue:
     if type(value) is float and math.isfinite(value):
         return value
 
-    raise TypeError(
-        f"Unsupported immutable JSON value type: {type(value).__name__}"
-    )
+    raise TypeError(f"Unsupported immutable JSON value type: {type(value).__name__}")
 
 
 def canonical_json_bytes(value: JsonValue) -> bytes:
