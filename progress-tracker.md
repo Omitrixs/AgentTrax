@@ -1,57 +1,98 @@
 # Progress Tracker
 
-Update this file whenever the active feature, implementation status, or an architecture decision changes.
+Update this file whenever the active feature, implementation status, or an architectural decision changes.
 
 ## Current Phase
 
-- Phase 0: Project specification and repository baseline.
+- Phase 1: Core runtime implementation.
 
 ## Current Goal
 
-- Record the approved initial scope and development decisions.
-- Verify the Python environment and development tooling.
-- Complete the remaining AT-01 acceptance criteria before implementing core contracts.
+- Implement AT-04: Pure policy evaluation.
+- Use the deterministic AT-03 simulator as the policy engine's scenario foundation.
+- Preserve the approved feature boundaries and acceptance criteria.
 
 ## Project status
 
-The initial project specification and approved decisions are documented. The repository baseline and decision records are committed to Git. No application code or implemented product features have been confirmed yet.
+The initial project specification, repository baseline, and development environment are complete. AT-02 core contracts have been implemented and verified against the approved specification.
+
+The project remains simulator-only. No real-world tool side effects are permitted in the MVP.
+
+AT-03 deterministic scenario simulator has been implemented and passed final verification.
 
 ## Feature status
 
 | Feature | Status | Evidence / notes |
 |---|---|---|
-| AT-00 Project specification | Approved | Simulator-first MVP, initial stack, CLI-first approach, order-management demo, and in-memory-first trace storage approved and recorded |
-| AT-01 Repository and environment baseline | Completed | Python 3.12.10 and project-local `.venv` verified; pinned development dependencies installed from `requirements-dev.txt`; smoke test passes (1 test); Ruff passes; README setup instructions added; fresh-clone installation and verification passed |
-| AT-02 Core contracts | Not started | Typed action, decision, execution, verification, and trace models |
-| AT-03 Deterministic scenario simulator | Not started | One scenario, explicit state and success conditions |
+| AT-00 Product specification | Approved | Simulator-first MVP, initial stack, CLI-first approach, order-management demo, and in-memory-first trace storage approved and recorded |
+| AT-01 Repository and environment baseline | Completed | Python 3.12.10 and project-local `.venv` verified; development dependencies installed; smoke test passes; Ruff passes; fresh-clone installation and verification passed |
+| AT-02 Core contracts | Completed | All five contracts and enums implemented; strict validation, immutable nested JSON, UTC timestamps, canonical proposal digest, trace sanitization, and lifecycle consistency implemented; H1–H10 covered by tests; 302 tests pass; Ruff and `git diff --check` pass |
+| AT-03 Deterministic scenario simulator | Completed | One deterministic in-memory order-support scenario; immutable validated models; reset behavior; four allowlisted tools; business-rule validation; 59 scenario tests pass; full suite: 362 passed; Ruff and diff checks clean |
 | AT-04 Policy engine | Not started | Pure allow/block/approval decision logic |
-| AT-05 Gated tool executor | Not started | Executor refuses calls without a valid allow decision |
-| AT-06 Independent verifier | Not started | Verifies observed state and postconditions |
-| AT-07 Trace recorder | Not started | Correlated events and secret redaction |
-| AT-08 End-to-end demo workflow | Not started | Repeatable scenario showing blocked and successful actions |
-| AT-09 API layer | Deferred | Reconsider FastAPI after the core logic |
-| AT-10 Dashboard | Not started | Focused UI for trace inspection, if time allows |
-| AT-11 Model adapter | Deferred | Real model integration is optional; confirm mock-agent decision before implementation |
-| AT-12 Evaluation suite | Not started | Fixed scenarios and measurable metrics |
-| AT-13 Showcase hardening | Not started | Clean setup, documented limitations, demo script |
+| AT-05 Gated tool executor | Not started | Executor independently validates decisions and refuses unauthorized execution |
+| AT-06 Approval workflow | Not started | Explicit approval bound to the exact action payload, with expiry and replay protection |
+| AT-07 Independent verifier | Not started | Verifies observed simulator state and task postconditions |
+| AT-08 Trace recorder | Not started | Correlated lifecycle events and sensitive-value redaction |
+| AT-09 End-to-end showcase scenario | Not started | Repeatable scenario showing blocked, approval-required, and successfully verified actions |
+| AT-10 API layer | Deferred | Reconsider FastAPI after the CLI workflow is proven |
+| AT-11 Showcase UI | Not started | Focused dashboard for scenario control and trace inspection |
+| AT-12 Model adapter | Deferred | Optional real model integration; deterministic mock agent remains a proposed architectural decision |
+| AT-13 Evaluation suite | Not started | Fixed scenarios and measurable evaluation metrics |
+| AT-14 Showcase hardening | Not started | Clean setup, documented limitations, demo script, and final regression checks |
 
 ## In Progress
+
+- AT-04: Policy engine.
 
 ## Completed
 
 - Repository baseline commit created and verified.
-- Approved initial decisions recorded in `decisions-log.md`.
-- AT-01: Repository and environment baseline. Verified from a fresh Git clone with a new virtual environment, successful dependency installation, 1 passing test, and clean Ruff checks.
+- Approved initial decisions D-001 and D-005 through D-009 recorded in `decisions-log.md`.
+- AT-01: Repository and environment baseline completed and verified from a fresh Git clone.
+- AT-02: Core contracts implemented and verified against `docs/AT-02-core-contracts-spec.md`.
+  - All five contracts and their enums implemented.
+  - Strict validation and immutable JSON structures enforced.
+  - Timestamp conventions and trace-redaction requirements enforced.
+  - `compute_proposal_digest`, `sanitize_details`, and `check_lifecycle_consistency` implemented.
+  - Lifecycle rules H1–H10 covered by tests.
+  - AT-02 resolved decisions AT02-Q1 through AT02-Q4 implemented.
+  - Full test suite: 302 passed.
+  - Ruff: all checks passed.
+  - `git diff --check`: clean.
+
+  - AT-03: Deterministic scenario simulator completed and verified.
+  - Deterministic order-support scenario implemented.
+  - Strict immutable models and objective consistency validation implemented.
+  - Deterministic reset and isolated in-memory state implemented.
+  - Four explicitly allowlisted operations implemented.
+  - Registry and operation errors remain distinct.
+  - Regression tests cover inconsistent scenario objectives.
+  - Scenario tests: 59 passed.
+  - Full test suite: 362 passed.
+  - Ruff: all checks passed.
+  - `git diff --check`: clean.
+  - Specification recorded in `docs/AT-03-simulator-spec.md`.
+  59 scenario tests pass; full suite: 362 passed
+
+## Deferred requirements
+
+- AT-02 / AT-07: Task-level aggregation must not count `NO_CHANGE_CONFIRMED` as goal completion. A successfully verified absence of state change for a non-executed action is not equivalent to successful completion of the user's task. Enforce this in the independent verifier and task-level outcome aggregation.
+- AT-10: API layer remains deferred until the core CLI workflow is proven.
+- AT-12: Real model integration remains optional and deferred.
 
 ## Next Up
 
-1. Begin AT-02: define and test the core contracts, after reviewing the feature requirements and confirming the implementation scope.
+1. AT-04: Implement pure policy evaluation.
+2. AT-05: Implement the gated tool executor.
+3. AT-06: Implement the approval workflow.
+
+Follow the feature registry for dependencies and acceptance criteria. Do not skip feature boundaries.
 
 ## Open Questions
 
-- Should the dashboard be included in the first showcase, or deferred until the core workflow is proven?
-- Should trace persistence remain in-memory for the initial demo, with SQLite considered later? Initial decision: in-memory first.
-- Should the mock-agent approach be formally accepted as an architectural decision? The real model adapter remains optional.
+- Should the showcase UI be included in the first showcase, or deferred until the core workflow is proven?
+- Should the mock-agent approach be formally accepted as an architectural decision? D-002 remains proposed.
+- Should the modular monolith and separation of policy, execution, and verification be formally accepted? D-003 and D-004 remain proposed.
 
 ## Session Notes
 
@@ -60,3 +101,4 @@ The initial project specification and approved decisions are documented. The rep
 - Keep documentation aligned with verified repository state.
 - Implement one approved feature at a time.
 - Preserve existing Git history and verify changes before committing.
+- Do not mark proposed architectural decisions as accepted without explicit approval.
