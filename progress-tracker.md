@@ -8,8 +8,8 @@ Update this file whenever the active feature, implementation status, or an archi
 
 ## Current Goal
 
-- Implement AT-03: Deterministic scenario simulator.
-- Keep the first implementation entirely in-memory and simulator-only.
+- Implement AT-04: Pure policy evaluation.
+- Use the deterministic AT-03 simulator as the policy engine's scenario foundation.
 - Preserve the approved feature boundaries and acceptance criteria.
 
 ## Project status
@@ -18,6 +18,8 @@ The initial project specification, repository baseline, and development environm
 
 The project remains simulator-only. No real-world tool side effects are permitted in the MVP.
 
+AT-03 deterministic scenario simulator has been implemented and passed final verification.
+
 ## Feature status
 
 | Feature | Status | Evidence / notes |
@@ -25,7 +27,7 @@ The project remains simulator-only. No real-world tool side effects are permitte
 | AT-00 Product specification | Approved | Simulator-first MVP, initial stack, CLI-first approach, order-management demo, and in-memory-first trace storage approved and recorded |
 | AT-01 Repository and environment baseline | Completed | Python 3.12.10 and project-local `.venv` verified; development dependencies installed; smoke test passes; Ruff passes; fresh-clone installation and verification passed |
 | AT-02 Core contracts | Completed | All five contracts and enums implemented; strict validation, immutable nested JSON, UTC timestamps, canonical proposal digest, trace sanitization, and lifecycle consistency implemented; H1–H10 covered by tests; 302 tests pass; Ruff and `git diff --check` pass |
-| AT-03 Deterministic scenario simulator | Not started | One in-memory business scenario, explicit tools, initial state, and objective postconditions |
+| AT-03 Deterministic scenario simulator | Completed | One deterministic in-memory order-support scenario; immutable validated models; reset behavior; four allowlisted tools; business-rule validation; 59 scenario tests pass; full suite: 362 passed; Ruff and diff checks clean |
 | AT-04 Policy engine | Not started | Pure allow/block/approval decision logic |
 | AT-05 Gated tool executor | Not started | Executor independently validates decisions and refuses unauthorized execution |
 | AT-06 Approval workflow | Not started | Explicit approval bound to the exact action payload, with expiry and replay protection |
@@ -40,7 +42,7 @@ The project remains simulator-only. No real-world tool side effects are permitte
 
 ## In Progress
 
-- AT-03: Deterministic scenario simulator.
+- AT-04: Policy engine.
 
 ## Completed
 
@@ -58,6 +60,20 @@ The project remains simulator-only. No real-world tool side effects are permitte
   - Ruff: all checks passed.
   - `git diff --check`: clean.
 
+  - AT-03: Deterministic scenario simulator completed and verified.
+  - Deterministic order-support scenario implemented.
+  - Strict immutable models and objective consistency validation implemented.
+  - Deterministic reset and isolated in-memory state implemented.
+  - Four explicitly allowlisted operations implemented.
+  - Registry and operation errors remain distinct.
+  - Regression tests cover inconsistent scenario objectives.
+  - Scenario tests: 59 passed.
+  - Full test suite: 362 passed.
+  - Ruff: all checks passed.
+  - `git diff --check`: clean.
+  - Specification recorded in `docs/AT-03-simulator-spec.md`.
+  59 scenario tests pass; full suite: 362 passed
+
 ## Deferred requirements
 
 - AT-02 / AT-07: Task-level aggregation must not count `NO_CHANGE_CONFIRMED` as goal completion. A successfully verified absence of state change for a non-executed action is not equivalent to successful completion of the user's task. Enforce this in the independent verifier and task-level outcome aggregation.
@@ -66,9 +82,9 @@ The project remains simulator-only. No real-world tool side effects are permitte
 
 ## Next Up
 
-1. AT-03: Implement the deterministic in-memory scenario.
-2. AT-04: Implement pure policy evaluation.
-3. AT-05: Implement the gated tool executor.
+1. AT-04: Implement pure policy evaluation.
+2. AT-05: Implement the gated tool executor.
+3. AT-06: Implement the approval workflow.
 
 Follow the feature registry for dependencies and acceptance criteria. Do not skip feature boundaries.
 
