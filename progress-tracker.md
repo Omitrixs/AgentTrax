@@ -8,8 +8,9 @@ Update this file whenever the active feature, implementation status, or an archi
 
 ## Current Goal
 
-- Implement AT-04: Pure policy evaluation.
-- Use the deterministic AT-03 simulator as the policy engine's scenario foundation.
+- AT-05: Gated Tool Executor completed and verified.
+- Independently validate policy decisions and refuse unauthorized execution.
+- Integrate with AT-02 contracts, AT-03 simulator, and AT-04 policy engine.
 - Preserve the approved feature boundaries and acceptance criteria.
 
 ## Project status
@@ -28,8 +29,8 @@ AT-03 deterministic scenario simulator has been implemented and passed final ver
 | AT-01 Repository and environment baseline | Completed | Python 3.12.10 and project-local `.venv` verified; development dependencies installed; smoke test passes; Ruff passes; fresh-clone installation and verification passed |
 | AT-02 Core contracts | Completed | All five contracts and enums implemented; strict validation, immutable nested JSON, UTC timestamps, canonical proposal digest, trace sanitization, and lifecycle consistency implemented; H1–H10 covered by tests; 302 tests pass; Ruff and `git diff --check` pass |
 | AT-03 Deterministic scenario simulator | Completed | One deterministic in-memory order-support scenario; immutable validated models; reset behavior; four allowlisted tools; business-rule validation; 59 scenario tests pass; full suite: 362 passed; Ruff and diff checks clean |
-| AT-04 Policy engine | Not started | Pure allow/block/approval decision logic |
-| AT-05 Gated tool executor | Not started | Executor independently validates decisions and refuses unauthorized execution |
+| AT-04 Policy engine | Completed | Pure allow/block/approval decision logic; 35 policy tests pass; full suite: 397 passed; Ruff and diff checks clean |
+| AT-05 Gated tool executor | Completed | 30 AT-05 tests pass; full suite: 427 passed; project-wide Ruff lint passes; AT-05 formatting, compilation, and diff checks pass; repository-wide format check has documented pre-existing AT-02/AT-03 formatting differences and a Ruff crash; spec: `docs/AT-05-gated-tool-executor-spec.md` |
 | AT-06 Approval workflow | Not started | Explicit approval bound to the exact action payload, with expiry and replay protection |
 | AT-07 Independent verifier | Not started | Verifies observed simulator state and task postconditions |
 | AT-08 Trace recorder | Not started | Correlated lifecycle events and sensitive-value redaction |
@@ -42,7 +43,7 @@ AT-03 deterministic scenario simulator has been implemented and passed final ver
 
 ## In Progress
 
-- AT-04: Policy engine.
+- None. AT-05 is complete; AT-06 is the next planned feature.
 
 ## Completed
 
@@ -60,7 +61,7 @@ AT-03 deterministic scenario simulator has been implemented and passed final ver
   - Ruff: all checks passed.
   - `git diff --check`: clean.
 
-  - AT-03: Deterministic scenario simulator completed and verified.
+- AT-03: Deterministic scenario simulator completed and verified.
   - Deterministic order-support scenario implemented.
   - Strict immutable models and objective consistency validation implemented.
   - Deterministic reset and isolated in-memory state implemented.
@@ -72,7 +73,37 @@ AT-03 deterministic scenario simulator has been implemented and passed final ver
   - Ruff: all checks passed.
   - `git diff --check`: clean.
   - Specification recorded in `docs/AT-03-simulator-spec.md`.
-  59 scenario tests pass; full suite: 362 passed
+
+- AT-04: Policy engine completed and verified.
+  - Pure deterministic policy evaluation returning ALLOW, BLOCK, REQUIRE_APPROVAL.
+  - Business-rule boundaries enforced for all four tools.
+  - Every valid refund requires approval.
+  - Decisions are deterministic and bound to proposal digests.
+  - Policy evaluation causes no side effects.
+  - Policy tests: 35 passed.
+  - Full test suite: 397 passed.
+  - Ruff: all checks passed.
+  - Specification recorded in `docs/AT-04-policy-engine-spec.md`.
+
+- AT-05: Gated Tool Executor completed and verified.
+  - Independently reevaluates policy against fresh simulator state.
+  - Compares all six policy-decision fields before execution.
+  - Invokes tools only through the existing simulator registry after a
+    matching ALLOW decision.
+  - BLOCK returns NOT_EXECUTED / POLICY_BLOCKED.
+  - REQUIRE_APPROVAL returns NOT_EXECUTED / APPROVAL_PENDING.
+  - Integrity failures fail closed; action ID and digest linkage
+    mismatches raise ContractViolation before registry invocation.
+  - Tool, serialization, and internal failures remain distinct.
+  - AT-05 execution tests: 30 passed.
+  - Full project test suite: 427 passed.
+  - Project-wide Ruff lint: passed.
+  - AT-05 formatting, compilation, and git diff checks: passed.
+  - Repository-wide formatting limitation documented in the AT-05 spec.
+  - Specification: `docs/AT-05-gated-tool-executor-spec.md`.
+  - Implementation: `agenttrax/execution/executor.py`.
+  - Tests: `tests/execution/test_executor.py`.
+
 
 ## Deferred requirements
 
@@ -82,9 +113,9 @@ AT-03 deterministic scenario simulator has been implemented and passed final ver
 
 ## Next Up
 
-1. AT-04: Implement pure policy evaluation.
-2. AT-05: Implement the gated tool executor.
-3. AT-06: Implement the approval workflow.
+1. AT-06: Implement the approval workflow.
+2. AT-07: Implement the independent verifier.
+3. AT-08: Implement the trace recorder.
 
 Follow the feature registry for dependencies and acceptance criteria. Do not skip feature boundaries.
 
