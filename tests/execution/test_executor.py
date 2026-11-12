@@ -1,6 +1,6 @@
 """Tests for the gated tool executor."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -15,6 +15,7 @@ from agenttrax.contracts.models import (
     PolicyReasonCode,
     check_lifecycle_consistency,
 )
+from agenttrax.execution.approval import ApprovalService
 from agenttrax.execution.executor import GatedToolExecutor
 from agenttrax.scenarios.order_support import (
     OperationErrorCode,
@@ -665,3 +666,210 @@ def test_serialization_exception_returns_invalid_result(
     assert result.completed_at == fixed_clock()
 
     check_lifecycle_consistency(proposal, decision, result)
+
+# ---------------------------------------------------------------------------
+# AT-06 approval workflow integration
+# ---------------------------------------------------------------------------
+
+
+def make_refund_proposal() -> ActionProposal:
+    """Create a refund proposal that requires explicit approval."""
+    return make_proposal(
+        "issue_refund",
+        {
+            "order_id": DEMO_ORDER_ID,
+            "amount_minor_units": 100,
+        },
+    )
+
+
+def test_request_approval_accepts_require_approval_decision(
+    executor: GatedToolExecutor,
+) -> None:
+    proposal = make_refund_proposal()
+    decision = evaluate_decision(executor, proposal)
+
+    assert decision.decision is PolicyDecisionType.REQUIRE_APPROVAL
+
+    approval_id = executor.request_approval(proposal, decision)
+
+    assert isinstance(approval_id, str)
+    assert approval_id.strip()
+
+
+def test_request_approval_rejects_allow_decision(
+    executor: GatedToolExecutor,
+) -> None:
+    proposal = make_proposal("get_order", {"order_id": DEMO_ORDER_ID})
+    decision = evaluate_decision(executor, proposal)
+
+    assert decision.decision is PolicyDecisionType.ALLOW
+
+    with pytest.raises(ContractViolation):
+        executor.request_approval(proposal, decision)
+
+
+def test_request_approval_rejects_block_decision(
+    executor: GatedToolExecutor,
+) -> None:
+    proposal = make_proposal(
+        "issue_refund",
+        {"order_id": "invalid-order", "amount_minor_units": 100},
+    )
+    decision = evaluate_decision(executor, proposal)
+
+    assert decision.decision is PolicyDecisionType.BLOCK
+
+    with pytest.raises(ContractViolation):
+        executor.request_approval(proposal, decision)
+
+
+def test_pending_approval_cannot_execute(
+    executor: GatedToolExecutor,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    proposal = make_refund_proposal()
+    decision = evaluate_decision(executor, proposal)
+    approval_id = executor.request_approval(proposal, decision)
+
+    prevent_registry_invocation(executor, monkeypatch)
+
+    result = executor.execute_approved(approval_id)
+
+    assert result.status is ExecutionStatus.NOT_EXECUTED
+    assert result.not_executed_reason is NotExecutedReason.APPROVAL_PENDING
+    assert executor.state.order.refunded_minor_units == 0
+
+
+def test_denied_approval_cannot_execute(
+    executor: GatedToolExecutor,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    proposal = make_refund_proposal()
+    decision = evaluate_decision(executor, proposal)
+    approval_id = executor.request_approval(proposal, decision)
+
+    executor.deny(approval_id, "test-approver")
+
+    prevent_registry_invocation(executor, monkeypatch)
+
+    result = executor.execute_approved(approval_id)
+
+    assert result.status is ExecutionStatus.NOT_EXECUTED
+    assert result.not_executed_reason is NotExecutedReason.APPROVAL_DENIED
+    assert executor.state.order.refunded_minor_units == 0
+
+
+def test_approved_execution_succeeds_with_service_evidence(
+    executor: GatedToolExecutor,
+) -> None:
+    proposal = make_refund_proposal()
+    decision = evaluate_decision(executor, proposal)
+    approval_id = executor.request_approval(proposal, decision)
+
+    evidence = executor.approve(approval_id, "test-approver")
+
+    result = executor.execute_approved(approval_id)
+
+    assert result.status is ExecutionStatus.SUCCEEDED
+    assert result.action_id == proposal.action_id
+    assert result.result is not None
+    assert executor.state.order.refunded_minor_units == 100
+
+    check_lifecycle_consistency(
+        proposal,
+        decision,
+        result,
+        approval_evidence=evidence,
+    )
+
+
+def test_consumed_approval_cannot_be_replayed(
+    executor: GatedToolExecutor,
+) -> None:
+    proposal = make_refund_proposal()
+    decision = evaluate_decision(executor, proposal)
+    approval_id = executor.request_approval(proposal, decision)
+
+    executor.approve(approval_id, "test-approver")
+
+    first_result = executor.execute_approved(approval_id)
+
+    assert first_result.status is ExecutionStatus.SUCCEEDED
+    assert executor.state.order.refunded_minor_units == 100
+
+    with pytest.raises(ContractViolation):
+        executor.execute_approved(approval_id)
+
+    # The second attempt must not issue another refund.
+    assert executor.state.order.refunded_minor_units == 100
+
+def test_expired_approval_cannot_execute(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current_time = [datetime(2026, 11, 5, 12, 0, 0, tzinfo=UTC)]
+
+    def mutable_clock() -> datetime:
+        return current_time[0]
+
+    approval_service = ApprovalService(
+        clock=mutable_clock,
+        ttl=timedelta(minutes=1),
+    )
+
+    executor = GatedToolExecutor(
+        clock=mutable_clock,
+        approval_service=approval_service,
+    )
+
+    proposal = make_refund_proposal()
+    decision = evaluate_decision(executor, proposal)
+
+    approval_id = executor.request_approval(proposal, decision)
+    executor.approve(approval_id, "test-approver")
+
+    # Move the clock to the exact expiry boundary.
+    current_time[0] += timedelta(minutes=1)
+
+    prevent_registry_invocation(executor, monkeypatch)
+
+    result = executor.execute_approved(approval_id)
+
+    assert result.status is ExecutionStatus.NOT_EXECUTED
+    assert result.not_executed_reason is NotExecutedReason.APPROVAL_EXPIRED
+    assert executor.state.order.refunded_minor_units == 0
+
+def test_approved_execution_fails_if_policy_changes(
+    executor: GatedToolExecutor,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    proposal = make_refund_proposal()
+    decision = evaluate_decision(executor, proposal)
+
+    approval_id = executor.request_approval(proposal, decision)
+    executor.approve(approval_id, "test-approver")
+
+    # Simulate policy changing after approval was granted.
+    def changed_policy(
+        proposal: ActionProposal,
+        snapshot: Any,
+    ) -> Any:
+        return decision.model_copy(
+            update={
+                "decision": PolicyDecisionType.BLOCK,
+            }
+        )
+
+    monkeypatch.setattr(
+        executor._policy_engine,
+        "evaluate",
+        changed_policy,
+    )
+
+    prevent_registry_invocation(executor, monkeypatch)
+
+    result = executor.execute_approved(approval_id)
+
+    assert result.status is ExecutionStatus.NOT_EXECUTED
+    assert result.not_executed_reason is NotExecutedReason.INTEGRITY_CHECK_FAILED
+    assert executor.state.order.refunded_minor_units == 0
