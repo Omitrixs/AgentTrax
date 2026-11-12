@@ -21,6 +21,7 @@ from pydantic import BaseModel
 
 from agenttrax.contracts.models import (
     ActionProposal,
+    ApprovalEvidence,
     ContractViolation,
     ExecutionErrorCode,
     ExecutionResult,
@@ -33,6 +34,7 @@ from agenttrax.contracts.models import (
     thaw_json_value,
 )
 from agenttrax.contracts.serialization import freeze_json_value
+from agenttrax.execution.approval import ApprovalService, ApprovalStatus
 from agenttrax.policy import PolicyEngine
 from agenttrax.scenarios.order_support import ScenarioOperationError
 from agenttrax.scenarios.registry import (
@@ -59,6 +61,7 @@ class GatedToolExecutor:
         self,
         state: OrderSupportScenarioState | None = None,
         clock: Clock = _utc_now,
+        approval_service: ApprovalService | None = None,
     ) -> None:
         if state is None:
             state = OrderSupportScenarioState()
@@ -67,6 +70,11 @@ class GatedToolExecutor:
         self._registry = ScenarioToolRegistry(state)
         self._policy_engine = PolicyEngine()
         self._clock = clock
+        self._approval_service = (
+            approval_service
+            if approval_service is not None
+            else ApprovalService(clock=clock)
+        )
 
     @property
     def state(self) -> OrderSupportScenarioState:
@@ -113,6 +121,128 @@ class GatedToolExecutor:
 
         # 7. Invoke the allowlisted simulator tool.
         return self._invoke_tool(proposal, supplied_decision)
+    def request_approval(
+        self,
+        proposal: ActionProposal,
+        supplied_decision: PolicyDecision,
+    ) -> str:
+        """Create an approval request after independently rechecking policy."""
+        self._validate_types(proposal, supplied_decision)
+        self._validate_linkage(proposal, supplied_decision)
+
+        snapshot = self._state.snapshot()
+        expected_decision = self._policy_engine.evaluate(proposal, snapshot)
+
+        if not self._decisions_match(expected_decision, supplied_decision):
+            raise ContractViolation(
+                "Approval request decision does not match current policy."
+            )
+
+        if expected_decision.decision != PolicyDecisionType.REQUIRE_APPROVAL:
+            raise ContractViolation(
+                "Approval can only be requested for REQUIRE_APPROVAL decisions."
+            )
+
+        return self._approval_service.request_approval(
+            proposal,
+            supplied_decision,
+        )
+
+    def approve(
+        self,
+        approval_id: str,
+        approver_id: str,
+    ) -> ApprovalEvidence:
+        """Approve a pending request and return service-generated evidence."""
+        return self._approval_service.approve(approval_id, approver_id)
+
+    def deny(
+        self,
+        approval_id: str,
+        approver_id: str,
+    ) -> None:
+        """Deny a pending approval request."""
+        self._approval_service.deny(approval_id, approver_id)
+
+    def execute_approved(self, approval_id: str) -> ExecutionResult:
+        """Execute only the original proposal held by an approved request."""
+        proposal, decision, status, evidence = (
+            self._approval_service._get_execution_record(approval_id)
+        )
+
+        if status == ApprovalStatus.PENDING:
+            return self._approval_status_result(
+                proposal, decision, NotExecutedReason.APPROVAL_PENDING
+            )
+
+        if status == ApprovalStatus.DENIED:
+            return self._approval_status_result(
+                proposal, decision, NotExecutedReason.APPROVAL_DENIED
+            )
+
+        if status == ApprovalStatus.EXPIRED:
+            return self._approval_status_result(
+                proposal, decision, NotExecutedReason.APPROVAL_EXPIRED
+            )
+
+        if status != ApprovalStatus.APPROVED or evidence is None:
+            raise ContractViolation(
+                "Approval is not in an executable state."
+            )
+
+        # Recheck the original proposal and its stored decision.
+        if (
+            decision.action_id != proposal.action_id
+            or decision.proposal_digest != compute_proposal_digest(proposal)
+        ):
+            return self._integrity_failure(proposal, decision)
+
+        snapshot = self._state.snapshot()
+        expected_decision = self._policy_engine.evaluate(proposal, snapshot)
+
+        if (
+            expected_decision.decision != PolicyDecisionType.REQUIRE_APPROVAL
+            or not self._decisions_match(expected_decision, decision)
+        ):
+            return self._integrity_failure(proposal, decision)
+
+        # Consume atomically before invoking the simulator tool.
+        consumed_proposal, consumed_decision, consumed_evidence = (
+            self._approval_service._consume_approved(approval_id)
+        )
+
+        if (
+            consumed_proposal != proposal
+            or consumed_decision != decision
+            or consumed_evidence != evidence
+        ):
+            return self._integrity_failure(proposal, decision)
+
+        return self._invoke_tool(
+            proposal,
+            decision,
+            approval_evidence=evidence,
+        )
+
+    def _approval_status_result(
+        self,
+        proposal: ActionProposal,
+        decision: PolicyDecision,
+        reason: NotExecutedReason,
+    ) -> ExecutionResult:
+        """Build a lifecycle-checked result for a non-executable approval."""
+        return self._finalize(
+            proposal,
+            decision,
+            ExecutionResult(
+                action_id=proposal.action_id,
+                status=ExecutionStatus.NOT_EXECUTED,
+                result=None,
+                error_code=None,
+                not_executed_reason=reason,
+                completed_at=self._clock(),
+            ),
+        )
 
     def _validate_types(
         self,
@@ -212,6 +342,7 @@ class GatedToolExecutor:
         self,
         proposal: ActionProposal,
         supplied_decision: PolicyDecision,
+        approval_evidence: ApprovalEvidence | None = None,
     ) -> ExecutionResult:
         """Invoke the tool through the registry and build the execution result."""
         tool_name = proposal.tool_name
@@ -220,9 +351,13 @@ class GatedToolExecutor:
         try:
             raw_result = self._registry.invoke(tool_name, arguments)
         except (ScenarioRegistryError, ScenarioOperationError) as exc:
-            return self._registry_failure(proposal, supplied_decision, exc)
+            return self._registry_failure(
+                proposal, supplied_decision, exc, approval_evidence
+            )
         except Exception as exc:
-            return self._internal_failure(proposal, supplied_decision, exc)
+            return self._internal_failure(
+                proposal, supplied_decision, exc, approval_evidence
+            )
 
         # Convert simulator result to a JSON-compatible dictionary.
         try:
@@ -239,6 +374,7 @@ class GatedToolExecutor:
                     not_executed_reason=None,
                     completed_at=self._clock(),
                 ),
+                approval_evidence=approval_evidence,
             )
 
         result = ExecutionResult(
@@ -254,7 +390,8 @@ class GatedToolExecutor:
             proposal,
             supplied_decision,
             result,
-        )
+            approval_evidence=approval_evidence,
+)
 
     def _serialize_result(self, raw_result: object) -> dict[str, object]:
         """Serialize a supported Pydantic simulator result into a JSON object."""
@@ -279,6 +416,7 @@ class GatedToolExecutor:
         proposal: ActionProposal,
         supplied_decision: PolicyDecision,
         exc: ScenarioRegistryError | ScenarioOperationError,
+        approval_evidence: ApprovalEvidence | None = None,
     ) -> ExecutionResult:
         """Handle expected registry and scenario operation failures."""
         return self._finalize(
@@ -292,6 +430,7 @@ class GatedToolExecutor:
                 not_executed_reason=None,
                 completed_at=self._clock(),
             ),
+            approval_evidence=approval_evidence,
         )
 
     def _internal_failure(
@@ -299,6 +438,7 @@ class GatedToolExecutor:
         proposal: ActionProposal,
         supplied_decision: PolicyDecision,
         exc: Exception,
+        approval_evidence: ApprovalEvidence | None = None,
     ) -> ExecutionResult:
         """Handle unexpected internal executor failures."""
         return self._finalize(
@@ -312,6 +452,7 @@ class GatedToolExecutor:
                 not_executed_reason=None,
                 completed_at=self._clock(),
             ),
+            approval_evidence=approval_evidence,
         )
 
     def _finalize(
@@ -319,7 +460,13 @@ class GatedToolExecutor:
         proposal: ActionProposal,
         decision: PolicyDecision,
         result: ExecutionResult,
+        approval_evidence: ApprovalEvidence | None = None,
     ) -> ExecutionResult:
         """Validate lifecycle consistency before returning any result."""
-        check_lifecycle_consistency(proposal, decision, result)
+        check_lifecycle_consistency(
+            proposal,
+            decision,
+            result,
+            approval_evidence=approval_evidence,
+        )
         return result

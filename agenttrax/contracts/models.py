@@ -386,6 +386,7 @@ def check_lifecycle_consistency(
     decision: PolicyDecision,
     result: ExecutionResult | None = None,
     verification: VerificationResult | None = None,
+    approval_evidence: ApprovalEvidence | None = None,
 ) -> None:
     """Raise ContractViolation when lifecycle invariants are violated."""
 
@@ -441,6 +442,15 @@ def check_lifecycle_consistency(
             allowed_statuses = {
                 ExecutionStatus.NOT_EXECUTED,
             }
+
+            if approval_evidence is not None:
+                allowed_statuses.update(
+                    {
+                        ExecutionStatus.SUCCEEDED,
+                        ExecutionStatus.FAILED,
+                    }
+                )
+
             allowed_reasons = {
                 NotExecutedReason.APPROVAL_PENDING,
                 NotExecutedReason.APPROVAL_DENIED,
@@ -459,6 +469,51 @@ def check_lifecycle_consistency(
         ):
             raise ContractViolation(
                 "H6: Not-executed reason is not allowed for the policy decision."
+            )
+
+    # H11-H13: Approval evidence is valid only for an approved execution.
+    if approval_evidence is not None:
+        if not isinstance(approval_evidence, ApprovalEvidence):
+            raise ContractViolation(
+                "H11: Approval evidence must be an ApprovalEvidence contract."
+            )
+
+        if decision.decision != PolicyDecisionType.REQUIRE_APPROVAL:
+            raise ContractViolation(
+                "H11: Approval evidence requires REQUIRE_APPROVAL."
+            )
+
+        if result is None or result.status not in {
+            ExecutionStatus.SUCCEEDED,
+            ExecutionStatus.FAILED,
+        }:
+            raise ContractViolation(
+                "H11: Approval evidence requires a SUCCEEDED or FAILED result."
+            )
+
+        if approval_evidence.action_id != proposal.action_id:
+            raise ContractViolation(
+                "H12: Approval evidence action_id does not match proposal."
+            )
+
+        if approval_evidence.proposal_digest != compute_proposal_digest(proposal):
+            raise ContractViolation(
+                "H12: Approval evidence digest does not match proposal."
+            )
+
+        if approval_evidence.policy_version != decision.policy_version:
+            raise ContractViolation(
+                "H12: Approval evidence policy version does not match decision."
+            )
+
+        if not (
+            approval_evidence.approved_at
+            <= result.completed_at
+            < approval_evidence.expires_at
+        ):
+            raise ContractViolation(
+                "H13: Execution completion must occur after approval "
+                "and before approval expiry."
             )
 
     if verification is not None:
@@ -493,3 +548,64 @@ def check_lifecycle_consistency(
             )
 
     # H10: INCONCLUSIVE is permitted with any execution status.
+
+
+class ApprovalEvidence(StrictContractModel):
+    """Immutable evidence that a specific pending action was approved."""
+
+    approval_id: NonBlankString
+    action_id: NonBlankString
+    proposal_digest: str
+    policy_version: NonBlankString
+    approved_at: datetime
+    expires_at: datetime
+
+    @field_validator(
+        "approval_id",
+        "action_id",
+        "policy_version",
+    )
+    @classmethod
+    def validate_nonblank_fields(cls, value: str) -> str:
+        return _validate_nonblank_string(value)
+
+    @field_validator("proposal_digest")
+    @classmethod
+    def validate_proposal_digest(cls, value: str) -> str:
+        if (
+            re.fullmatch(
+                rf"[0-9a-f]{{{PROPOSAL_DIGEST_HEX_LENGTH}}}",
+                value,
+            )
+            is None
+        ):
+            raise ValueError(
+                "Proposal digest must contain exactly "
+                f"{PROPOSAL_DIGEST_HEX_LENGTH} lowercase hexadecimal characters."
+            )
+        return value
+
+    @field_validator("approved_at", "expires_at", mode="before")
+    @classmethod
+    def validate_timestamps(cls, value: object) -> datetime:
+        if isinstance(value, str):
+            if not re.search(r"(Z|[+-]\d{2}:\d{2})$", value):
+                raise ValueError(
+                    "Timestamp string must include a timezone offset."
+                )
+
+            try:
+                value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError as exc:
+                raise ValueError("Invalid ISO 8601 timestamp.") from exc
+
+        if not isinstance(value, datetime):
+            raise ValueError("Timestamp must be a datetime or ISO 8601 string.")
+
+        return _validate_utc_datetime(value)
+
+    @model_validator(mode="after")
+    def validate_expiry(self) -> ApprovalEvidence:
+        if self.expires_at <= self.approved_at:
+            raise ValueError("Approval expiry must be later than approval time.")
+        return self

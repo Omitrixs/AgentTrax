@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from agenttrax.contracts.models import (
     ActionProposal,
+    ApprovalEvidence,
     ContractViolation,
     ExecutionErrorCode,
     ExecutionResult,
@@ -1560,3 +1561,194 @@ def test_verification_result_normalizes_json_timestamp_to_utc(
 
     assert result.verified_at.tzinfo is UTC
     assert result.verified_at.hour == 10
+
+def test_lifecycle_accepts_matching_approval_evidence(
+    valid_proposal_data: dict[str, object],
+    valid_policy_decision_data: dict[str, object],
+    valid_execution_result_data: dict[str, object],
+) -> None:
+    proposal = ActionProposal.model_validate(valid_proposal_data)
+    digest = compute_proposal_digest(proposal)
+
+    decision_data = dict(valid_policy_decision_data)
+    decision_data.update(
+        action_id=proposal.action_id,
+        proposal_digest=digest,
+        decision=PolicyDecisionType.REQUIRE_APPROVAL,
+        reason_code=PolicyReasonCode.APPROVAL_REQUIRED,
+    )
+    decision = PolicyDecision.model_validate(decision_data)
+
+    approved_at = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
+    expires_at = approved_at + timedelta(minutes=15)
+
+    evidence = ApprovalEvidence(
+        approval_id="approval-test-001",
+        action_id=proposal.action_id,
+        proposal_digest=digest,
+        policy_version=decision.policy_version,
+        approved_at=approved_at,
+        expires_at=expires_at,
+    )
+
+    result_data = dict(valid_execution_result_data)
+    result_data.update(
+        action_id=proposal.action_id,
+        status=ExecutionStatus.SUCCEEDED,
+        result={"order_status": "confirmed"},
+        error_code=None,
+        not_executed_reason=None,
+        completed_at=approved_at + timedelta(seconds=30),
+    )
+    result = ExecutionResult.model_validate(result_data)
+
+    assert (
+        check_lifecycle_consistency(
+            proposal,
+            decision,
+            result,
+            approval_evidence=evidence,
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    "status",
+    [ExecutionStatus.SUCCEEDED, ExecutionStatus.FAILED],
+)
+def test_lifecycle_rejects_approval_execution_without_evidence(
+    valid_proposal_data: dict[str, object],
+    valid_policy_decision_data: dict[str, object],
+    valid_execution_result_data: dict[str, object],
+    status: ExecutionStatus,
+) -> None:
+    proposal = ActionProposal.model_validate(valid_proposal_data)
+
+    decision_data = dict(valid_policy_decision_data)
+    decision_data.update(
+        action_id=proposal.action_id,
+        proposal_digest=compute_proposal_digest(proposal),
+        decision=PolicyDecisionType.REQUIRE_APPROVAL,
+        reason_code=PolicyReasonCode.APPROVAL_REQUIRED,
+    )
+    decision = PolicyDecision.model_validate(decision_data)
+
+    result_data = dict(valid_execution_result_data)
+    result_data.update(
+        action_id=proposal.action_id,
+        status=status,
+        result={"order_status": "confirmed"}
+        if status == ExecutionStatus.SUCCEEDED
+        else None,
+        error_code=(
+            ExecutionErrorCode.TOOL_ERROR
+            if status == ExecutionStatus.FAILED
+            else None
+        ),
+        not_executed_reason=None,
+    )
+    result = ExecutionResult.model_validate(result_data)
+
+    with pytest.raises(ContractViolation, match="H5"):
+        check_lifecycle_consistency(proposal, decision, result)
+
+
+def test_lifecycle_rejects_approval_evidence_for_another_policy_version(
+    valid_proposal_data: dict[str, object],
+    valid_policy_decision_data: dict[str, object],
+    valid_execution_result_data: dict[str, object],
+) -> None:
+    proposal = ActionProposal.model_validate(valid_proposal_data)
+    digest = compute_proposal_digest(proposal)
+
+    decision_data = dict(valid_policy_decision_data)
+    decision_data.update(
+        action_id=proposal.action_id,
+        proposal_digest=digest,
+        decision=PolicyDecisionType.REQUIRE_APPROVAL,
+        reason_code=PolicyReasonCode.APPROVAL_REQUIRED,
+    )
+    decision = PolicyDecision.model_validate(decision_data)
+
+    evidence = ApprovalEvidence(
+        approval_id="approval-test-002",
+        action_id=proposal.action_id,
+        proposal_digest=digest,
+        policy_version="different-policy-version",
+        approved_at=datetime(2026, 10, 1, 12, 0, tzinfo=UTC),
+        expires_at=datetime(2026, 10, 1, 12, 15, tzinfo=UTC),
+    )
+
+    result_data = dict(valid_execution_result_data)
+    result_data.update(
+        action_id=proposal.action_id,
+        status=ExecutionStatus.SUCCEEDED,
+        result={"order_status": "confirmed"},
+        error_code=None,
+        not_executed_reason=None,
+        completed_at=datetime(2026, 10, 1, 12, 1, tzinfo=UTC),
+    )
+    result = ExecutionResult.model_validate(result_data)
+
+    with pytest.raises(ContractViolation, match="H12"):
+        check_lifecycle_consistency(
+            proposal,
+            decision,
+            result,
+            approval_evidence=evidence,
+        )
+
+
+@pytest.mark.parametrize(
+    "completed_at",
+    [
+        datetime(2026, 10, 1, 11, 59, 59, tzinfo=UTC),
+        datetime(2026, 10, 1, 12, 15, tzinfo=UTC),
+    ],
+)
+def test_lifecycle_rejects_execution_outside_approval_window(
+    valid_proposal_data: dict[str, object],
+    valid_policy_decision_data: dict[str, object],
+    valid_execution_result_data: dict[str, object],
+    completed_at: datetime,
+) -> None:
+    proposal = ActionProposal.model_validate(valid_proposal_data)
+    digest = compute_proposal_digest(proposal)
+
+    decision_data = dict(valid_policy_decision_data)
+    decision_data.update(
+        action_id=proposal.action_id,
+        proposal_digest=digest,
+        decision=PolicyDecisionType.REQUIRE_APPROVAL,
+        reason_code=PolicyReasonCode.APPROVAL_REQUIRED,
+    )
+    decision = PolicyDecision.model_validate(decision_data)
+
+    evidence = ApprovalEvidence(
+        approval_id="approval-test-003",
+        action_id=proposal.action_id,
+        proposal_digest=digest,
+        policy_version=decision.policy_version,
+        approved_at=datetime(2026, 10, 1, 12, 0, tzinfo=UTC),
+        expires_at=datetime(2026, 10, 1, 12, 15, tzinfo=UTC),
+    )
+
+    result_data = dict(valid_execution_result_data)
+    result_data.update(
+        action_id=proposal.action_id,
+        status=ExecutionStatus.SUCCEEDED,
+        result={"order_status": "confirmed"},
+        error_code=None,
+        not_executed_reason=None,
+        completed_at=completed_at,
+    )
+    result = ExecutionResult.model_validate(result_data)
+
+    with pytest.raises(ContractViolation, match="H13"):
+        check_lifecycle_consistency(
+            proposal,
+            decision,
+            result,
+            approval_evidence=evidence,
+        )
