@@ -102,16 +102,23 @@ This file is the source of truth for feature boundaries and acceptance criteria.
 
 ### AT-07: Independent verifier
 **Depends on:** AT-03, AT-05
+**Status:** Completed
 
 **Scope**
-- Check task postconditions using observed simulator state.
-- Return verified success, verified failure, or inconclusive.
+- Independently verify supported action transitions against observed simulator state.
+- Evaluate task-level postconditions against the explicit scenario objective.
+- Reconcile executor-reported results with observed state and fail closed when evidence is missing, conflicting, or unverifiable.
+- Keep action-level `NO_CHANGE_CONFIRMED` distinct from task-level completion.
 
 **Acceptance criteria**
 - Model-generated claims cannot set verification status.
-- A tool success with an unmet postcondition does not become task success.
+- A tool success with an unmet postcondition does not become verified task success.
 - Verifier errors cannot produce verified success.
-- Tests cover success, failure, and inconclusive outcomes.
+- Missing or conflicting evidence produces an inconclusive result.
+- `NO_CHANGE_CONFIRMED` cannot establish task-level success.
+- Tests cover success, failure, inconclusive outcomes, and task-level objective evaluation.
+
+**Specification:** `docs/AT-07-independent-verifier-spec.md`
 
 ### AT-08: Trace recorder
 **Depends on:** AT-02, AT-04, AT-05, AT-07

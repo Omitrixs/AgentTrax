@@ -92,6 +92,19 @@ Every verification result must distinguish:
 - verified failure
 - inconclusive / unable to verify
 
+Action-level verification and task-level verification are separate decisions:
+
+- Action-level verification checks the expected transition against observed
+  before/after simulator snapshots and reconciles the executor-reported
+  result with the observed state.
+- Task-level verification evaluates the scenario's explicit objective
+  postconditions against the current observed simulator state.
+- A successful tool invocation is not sufficient evidence of task success.
+- `NO_CHANGE_CONFIRMED` may describe an unchanged state for a non-executed
+  action, but it must never count as task-level goal completion.
+- Missing evidence, conflicting evidence, and verifier errors must not
+  produce verified success.
+
 Use strict schemas and reject unknown fields where practical at trust boundaries.
 
 ## Invariants
@@ -108,6 +121,11 @@ Use strict schemas and reject unknown fields where practical at trust boundaries
 10. Core tests run offline with deterministic fakes.
 11. No real-world side effects are allowed in the showcase MVP.
 12. Secrets are never included in trace payloads.
+13. Action-level `NO_CHANGE_CONFIRMED` is not task-level goal completion.
+14. Task-level verified success requires the explicit scenario objective
+    to be satisfied by observed state.
+15. Missing, conflicting, or unverifiable evidence fails closed and cannot
+    produce verified success.
 
 ## Error handling
 

@@ -369,6 +369,92 @@ class VerificationResult(StrictContractModel):
         return self
 
 
+class TaskVerificationResult(StrictContractModel):
+    """An independent assessment of whether the overall task objective was met."""
+
+    status: VerificationStatus
+    reason_code: VerificationReasonCode
+    reason: NonBlankString
+    evidence: FrozenJsonObject | None = None
+    verified_at: datetime
+
+    @field_validator("reason")
+    @classmethod
+    def validate_nonblank_reason(cls, value: str) -> str:
+        return _validate_nonblank_string(value)
+
+    @field_validator("evidence", mode="before")
+    @classmethod
+    def validate_and_copy_evidence(cls, value: object) -> FrozenJsonObject | None:
+        if value is None:
+            return None
+        if type(value) is not dict:
+            raise ValueError(
+    "Task verification evidence must be a JSON object or None."
+)
+
+        try:
+            enforce_json_limits(value)
+            return FrozenJsonObject(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Invalid task verification evidence: {exc}") from exc
+
+    @field_validator("verified_at", mode="before")
+    @classmethod
+    def validate_verified_at(cls, value: object) -> datetime:
+        if isinstance(value, str):
+            if not re.search(r"(Z|[+-]\d{2}:\d{2})$", value):
+                raise ValueError("Timestamp string must include a timezone offset.")
+
+            try:
+                value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError as exc:
+                raise ValueError("Invalid ISO 8601 timestamp.") from exc
+
+        if not isinstance(value, datetime):
+            raise ValueError("Timestamp must be a datetime or ISO 8601 string.")
+
+        return _validate_utc_datetime(value)
+
+    @model_validator(mode="after")
+    def validate_status_reason_pair(self) -> TaskVerificationResult:
+        allowed_reason_codes = {
+            VerificationStatus.VERIFIED_SUCCESS: {
+                VerificationReasonCode.OUTCOME_MATCHES_EXPECTED,
+            },
+            VerificationStatus.VERIFIED_FAILURE: {
+                VerificationReasonCode.OUTCOME_MISMATCH,
+                VerificationReasonCode.UNEXPECTED_STATE_CHANGE,
+            },
+            VerificationStatus.INCONCLUSIVE: {
+                VerificationReasonCode.EVIDENCE_MISSING,
+                VerificationReasonCode.EVIDENCE_CONFLICTING,
+                VerificationReasonCode.VERIFIER_ERROR,
+            },
+        }
+
+        if self.reason_code not in allowed_reason_codes[self.status]:
+            raise ValueError(
+                f"Reason code {self.reason_code.value} is not valid "
+                f"for task verification status {self.status.value}."
+            )
+
+        if (
+            self.status
+            in {
+                VerificationStatus.VERIFIED_SUCCESS,
+                VerificationStatus.VERIFIED_FAILURE,
+            }
+            and self.evidence is None
+        ):
+            raise ValueError(
+                f"{self.status.value} requires task verification evidence."
+            )
+
+        return self
+
+
+
 def compute_proposal_digest(proposal: ActionProposal) -> str:
     """Compute the version-1 SHA-256 digest, excluding created_at."""
     payload = {
