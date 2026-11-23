@@ -124,14 +124,23 @@ This file is the source of truth for feature boundaries and acceptance criteria.
 **Depends on:** AT-02, AT-04, AT-05, AT-07
 
 **Scope**
-- Record correlated proposals, decisions, approvals, executions, and verification results.
-- Redact sensitive values.
+- Record correlated proposals, policy decisions, approval outcomes, executions, and verification results.
+- Preserve task and action correlation.
+- Maintain deterministic event sequencing and immutable snapshots.
+- Redact sensitive values through the existing trace contract sanitizer.
+- Keep action-level verification distinct from task-level verification.
+- Implement an independent in-memory recorder without changing executor or verifier behavior.
 
 **Acceptance criteria**
 - Trace order is deterministic in tests.
 - Each event links to a task and action where applicable.
-- Secrets are redacted.
-- Trace labels accurately reflect actual execution and verification.
+- Invalid lifecycle relationships and digest mismatches are rejected.
+- Execution labels reflect actual execution results.
+- Approval labels reflect actual approval-service outcomes.
+- Action and task verification scopes are distinguishable.
+- Secrets are redacted and caller-owned data is not mutated.
+- Concurrent recording preserves sequence integrity.
+- Failed records do not consume sequence numbers.
 
 ### AT-09: End-to-end showcase scenario
 **Depends on:** AT-03 through AT-08

@@ -44,6 +44,24 @@ python -m ruff check .
 
 The smoke test should pass, and Ruff should report that all checks passed.
 
+## Run the End-to-End Showcase
+
+Run the deterministic, simulator-only AgentTrax showcase:
+
+```powershell
+python -m agenttrax.showcase
+```
+
+The showcase demonstrates a blocked refund, an approval-required refund,
+successful support-case operations, independent action verification,
+task-level verification, and an auditable lifecycle trace.
+
+The command exits with code `0` when all showcase checks pass and code
+`1` when a required check fails. It uses fresh in-memory scenario state
+and performs no real-world actions.
+
+See `docs/AT-09-showcase-spec.md` for the scenario and acceptance criteria.
+
 ## Project Documentation
 
 These documents define the intended plan and engineering constraints:
