@@ -36,8 +36,12 @@ Do not add a database ORM, queue, vector database, agent framework, container pl
 6. **Approval service**: stores and resolves pending approvals. Approval is bound to the exact action payload and expires.
 7. **Tool registry and executor**: executes only explicitly registered simulator tools after an allow decision.
 8. **Verifier**: evaluates explicit postconditions against observed simulator state; does not trust the agent's narrative.
-9. **Trace recorder**: records correlated events and outcomes while redacting secrets.
-10. **Presentation layer**: renders task state, decisions, action details, verification, and trace.
+9. **Trace recorder**: records correlated lifecycle events in deterministic sequence, validates event relationships, and redacts sensitive values using the existing trace contracts.
+10. **Showcase runner**: composes the existing simulator, gated executor,
+    approval workflow, verifier, and trace recorder into a repeatable CLI
+    demonstration. It reports actual policy, execution, and verification
+    outcomes without bypassing component boundaries.
+11. **Presentation layer**: renders task state, decisions, action details, verification, and trace.
 
 ## Request/action lifecycle
 
@@ -58,6 +62,7 @@ Important distinctions:
 - `agenttrax/execution/`: gated tool executor and approval handling.
 - `agenttrax/verification/`: postcondition checks and task-level verification.
 - `agenttrax/tracing/`: event models, trace recording, redaction.
+- `agenttrax/showcase.py`: deterministic CLI composition of the existing runtime components.
 - `agenttrax/agents/`: mock agent and later provider adapters.
 - `tests/`: unit and integration tests mirroring boundaries.
 - `frontend/`: only if a separate UI is approved.
@@ -92,6 +97,19 @@ Every verification result must distinguish:
 - verified failure
 - inconclusive / unable to verify
 
+Action-level verification and task-level verification are separate decisions:
+
+- Action-level verification checks the expected transition against observed
+  before/after simulator snapshots and reconciles the executor-reported
+  result with the observed state.
+- Task-level verification evaluates the scenario's explicit objective
+  postconditions against the current observed simulator state.
+- A successful tool invocation is not sufficient evidence of task success.
+- `NO_CHANGE_CONFIRMED` may describe an unchanged state for a non-executed
+  action, but it must never count as task-level goal completion.
+- Missing evidence, conflicting evidence, and verifier errors must not
+  produce verified success.
+
 Use strict schemas and reject unknown fields where practical at trust boundaries.
 
 ## Invariants
@@ -108,6 +126,11 @@ Use strict schemas and reject unknown fields where practical at trust boundaries
 10. Core tests run offline with deterministic fakes.
 11. No real-world side effects are allowed in the showcase MVP.
 12. Secrets are never included in trace payloads.
+13. Action-level `NO_CHANGE_CONFIRMED` is not task-level goal completion.
+14. Task-level verified success requires the explicit scenario objective
+    to be satisfied by observed state.
+15. Missing, conflicting, or unverifiable evidence fails closed and cannot
+    produce verified success.
 
 ## Error handling
 

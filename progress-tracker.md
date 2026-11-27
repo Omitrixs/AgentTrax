@@ -8,10 +8,11 @@ Update this file whenever the active feature, implementation status, or an archi
 
 ## Current Goal
 
-- AT-06: Approval Workflow completed and verified.
-- Implement explicit, time-limited approval bound to the exact action payload.
-- Integrate approval evidence with the AT-02 lifecycle contracts and AT-05 gated executor.
-- Preserve the approved feature boundaries and acceptance criteria.
+- AT-09: End-to-end showcase scenario completed and verified.
+- Demonstrate blocked, approval-required, and successful actions.
+- Preserve independent action and task verification.
+- Record the actual lifecycle through the AT-08 trace recorder.
+- Validate complete, ordered, correctly correlated lifecycle traces, including detection of missing and duplicate events.
 
 ## Project status
 
@@ -21,20 +22,26 @@ The project remains simulator-only. No real-world tool side effects are permitte
 
 AT-03 deterministic scenario simulator has been implemented and passed final verification.
 
+AT-08 trace recorder has been implemented and verified. It records correlated lifecycle events using deterministic sequencing and existing sensitive-value sanitization.
+
+AT-09 end-to-end showcase has been implemented and passed final verification. The CLI demonstrates blocked execution, approval-gated execution, successful verified actions, separate task verification, and deterministic semantic replay. Trace validation checks exact lifecycle ordering, event uniqueness, task association, and verification scope.
+
+The full project test suite currently passes with 563 tests. Project-wide Ruff checks, Git diff checks, and the showcase execution all pass.
+
 ## Feature status
 
 | Feature | Status | Evidence / notes |
 |---|---|---|
 | AT-00 Product specification | Approved | Simulator-first MVP, initial stack, CLI-first approach, order-management demo, and in-memory-first trace storage approved and recorded |
 | AT-01 Repository and environment baseline | Completed | Python 3.12.10 and project-local `.venv` verified; development dependencies installed; smoke test passes; Ruff passes; fresh-clone installation and verification passed |
-| AT-02 Core contracts | Completed | All five contracts and enums implemented; strict validation, immutable nested JSON, UTC timestamps, canonical proposal digest, trace sanitization, and lifecycle consistency implemented; H1–H10 covered by tests; 302 tests pass; Ruff and `git diff --check` pass |
+| AT-02 Core contracts | Completed | All five contracts and enums implemented; strict validation, immutable nested JSON, UTC timestamps, canonical proposal digest, trace sanitization, and lifecycle consistency implemented; H1-H10 covered by tests; 302 tests pass; Ruff and `git diff --check` pass |
 | AT-03 Deterministic scenario simulator | Completed | One deterministic in-memory order-support scenario; immutable validated models; reset behavior; four allowlisted tools; business-rule validation; 59 scenario tests pass; full suite: 362 passed; Ruff and diff checks clean |
 | AT-04 Policy engine | Completed | Pure allow/block/approval decision logic; 35 policy tests pass; full suite: 397 passed; Ruff and diff checks clean |
 | AT-05 Gated tool executor | Completed | 30 AT-05 tests pass; full suite: 427 passed; project-wide Ruff lint passes; AT-05 formatting, compilation, and diff checks pass; repository-wide format check has documented pre-existing AT-02/AT-03 formatting differences and a Ruff crash; spec: `docs/AT-05-gated-tool-executor-spec.md` |
 | AT-06 Approval workflow | Completed | Immutable approval evidence, thread-safe in-memory approval service, executor integration, expiry, evidence validation, replay protection; full suite: 496 passed; Ruff and diff checks clean |
-| AT-07 Independent verifier | Not started | Verifies observed simulator state and task postconditions |
-| AT-08 Trace recorder | Not started | Correlated lifecycle events and sensitive-value redaction |
-| AT-09 End-to-end showcase scenario | Not started | Repeatable scenario showing blocked, approval-required, and successfully verified actions |
+| AT-07 Independent verifier | Completed | Action-level transition verification and task-level objective verification; no-change cannot count as task success; full suite: 514 passed; Ruff and diff checks clean; specification: `docs/AT-07-independent-verifier-spec.md` |
+| AT-08 Trace recorder | Completed | In-memory recorder captures correlated proposal, policy, approval, execution, and verification events; deterministic sequencing, immutable event snapshots, and sensitive-value sanitization implemented; full suite at AT-08 completion: 551 passed; Ruff and diff checks passed |
+| AT-09 End-to-end showcase scenario | Completed | `python -m agenttrax.showcase`; 12 acceptance tests; full suite: 563 passed; project-wide Ruff passed; `git diff --check` passed; showcase result PASS; exact lifecycle ordering, duplicate-event rejection, task association, and verification-scope checks covered |
 | AT-10 API layer | Deferred | Reconsider FastAPI after the CLI workflow is proven |
 | AT-11 Showcase UI | Not started | Focused dashboard for scenario control and trace inspection |
 | AT-12 Model adapter | Deferred | Optional real model integration; deterministic mock agent remains a proposed architectural decision |
@@ -43,19 +50,21 @@ AT-03 deterministic scenario simulator has been implemented and passed final ver
 
 ## In Progress
 
-- None. AT-06 is complete; AT-07 is the next planned feature.
+- None. AT-09 is complete.
 
 ## Completed
 
 - Repository baseline commit created and verified.
 - Approved initial decisions D-001 and D-005 through D-009 recorded in `decisions-log.md`.
+
 - AT-01: Repository and environment baseline completed and verified from a fresh Git clone.
+
 - AT-02: Core contracts implemented and verified against `docs/AT-02-core-contracts-spec.md`.
   - All five contracts and their enums implemented.
   - Strict validation and immutable JSON structures enforced.
   - Timestamp conventions and trace-redaction requirements enforced.
   - `compute_proposal_digest`, `sanitize_details`, and `check_lifecycle_consistency` implemented.
-  - Lifecycle rules H1–H10 covered by tests.
+  - Lifecycle rules H1-H10 covered by tests.
   - AT-02 resolved decisions AT02-Q1 through AT02-Q4 implemented.
   - Full test suite: 302 passed.
   - Ruff: all checks passed.
@@ -88,12 +97,10 @@ AT-03 deterministic scenario simulator has been implemented and passed final ver
 - AT-05: Gated Tool Executor completed and verified.
   - Independently reevaluates policy against fresh simulator state.
   - Compares all six policy-decision fields before execution.
-  - Invokes tools only through the existing simulator registry after a
-    matching ALLOW decision.
+  - Invokes tools only through the existing simulator registry after a matching ALLOW decision.
   - BLOCK returns NOT_EXECUTED / POLICY_BLOCKED.
   - REQUIRE_APPROVAL returns NOT_EXECUTED / APPROVAL_PENDING.
-  - Integrity failures fail closed; action ID and digest linkage
-    mismatches raise ContractViolation before registry invocation.
+  - Integrity failures fail closed; action ID and digest linkage mismatches raise ContractViolation before registry invocation.
   - Tool, serialization, and internal failures remain distinct.
   - AT-05 execution tests: 30 passed.
   - Full project test suite: 427 passed.
@@ -118,19 +125,71 @@ AT-03 deterministic scenario simulator has been implemented and passed final ver
   - `git diff --check`: clean.
   - Specification: `docs/AT-06-approval-workflow-spec.md`.
 
+- AT-07: Independent verifier completed and verified.
+  - Independent action-level verification checks expected transitions against observed before/after simulator snapshots.
+  - Executor-reported results are reconciled with observed state.
+  - Successful, failed, and non-executed action outcomes are distinguished.
+  - Missing, conflicting, and unverifiable evidence fail closed.
+  - Task-level verification checks refund amount, remaining balance, required case note, and case closure against the scenario objective.
+  - `NO_CHANGE_CONFIRMED` is permitted for action-level verification but cannot establish task-level success.
+  - Verification tests cover successful transitions, failures, inconclusive outcomes, and task-level objective checks.
+  - Full project test suite: 514 passed.
+  - Project-wide Ruff: all checks passed.
+  - `git diff --check`: clean.
+  - Specification: `docs/AT-07-independent-verifier-spec.md`.
+
+- AT-08: Trace recorder implemented and verified.
+  - Added the in-memory `TraceRecorder`.
+  - Captures proposal-created and policy-decision events.
+  - Captures approval-requested, approval-granted, approval-denied, and approval-expired events.
+  - Captures execution-started, execution-succeeded, execution-failed, and execution-skipped events.
+  - Captures action-level and task-level verification events.
+  - Preserves task and action correlation.
+  - Provides deterministic event sequencing with an injected clock and ID factory.
+  - Returns immutable event snapshots.
+  - Reuses existing trace sanitization to protect sensitive values.
+  - Recorder tests and full-suite validation passed.
+  - Full project test suite at AT-08 completion: 551 passed.
+  - Project-wide Ruff: all checks passed.
+  - Specification: `docs/AT-08-trace-recorder-spec.md`.
+  - Implementation: `agenttrax/tracing/recorder.py`.
+  - Tests: `tests/tracing/test_recorder.py`.
+
+- AT-09: End-to-end showcase scenario implemented and verified.
+  - Added `agenttrax/showcase.py` and the `python -m agenttrax.showcase` CLI.
+  - Demonstrates a policy-blocked refund with no execution.
+  - Demonstrates an approval-required refund with explicit approval before execution.
+  - Executes and independently verifies the support note and case closure.
+  - Records action-level and task-level verification separately.
+  - Uses fresh simulator state and deterministic semantic replay checks.
+  - Validates the exact expected lifecycle event sequence for all four actions.
+  - Rejects missing and duplicate lifecycle events.
+  - Validates task association and action-versus-task verification scope.
+  - Confirms task-verification status matches the independently verified task result.
+  - Added 12 acceptance tests in `tests/test_showcase.py`.
+  - Full project test suite: 563 passed.
+  - Project-wide Ruff: all checks passed.
+  - `git diff --check`: passed.
+  - CLI execution: SHOWCASE RESULT: PASS.
+  - Final showcase state: refund 25.00 USD, remaining 104.99 USD, case CLOSED.
+  - Trace events recorded: 22.
+  - Specification: `docs/AT-09-showcase-spec.md`.
+
 ## Deferred requirements
 
-- AT-02 / AT-07: Task-level aggregation must not count `NO_CHANGE_CONFIRMED` as goal completion. A successfully verified absence of state change for a non-executed action is not equivalent to successful completion of the user's task. Enforce this in the independent verifier and task-level outcome aggregation.
+- AT-02 / AT-07: Resolved in AT-07. `TaskVerificationResult` only permits `OUTCOME_MATCHES_EXPECTED` for verified task success; action-level `NO_CHANGE_CONFIRMED` cannot count as goal completion.
 - AT-10: API layer remains deferred until the core CLI workflow is proven.
 - AT-12: Real model integration remains optional and deferred.
 
 ## Next Up
 
-1. AT-07: Implement the independent verifier.
-2. AT-08: Implement the trace recorder.
-3. AT-09: Implement the end-to-end showcase scenario.
+AT-09 is complete. The next eligible features are:
 
-Follow the feature registry for dependencies and acceptance criteria. Do not skip feature boundaries.
+- AT-10: API layer (currently deferred; reconsider only if an HTTP boundary is needed).
+- AT-12: Optional model adapter.
+- AT-13: Evaluation suite.
+
+Select and approve the next feature before implementation. Follow the feature registry for dependencies and acceptance criteria. Do not skip feature boundaries.
 
 ## Open Questions
 
