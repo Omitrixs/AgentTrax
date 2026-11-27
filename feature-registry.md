@@ -121,7 +121,7 @@ This file is the source of truth for feature boundaries and acceptance criteria.
 **Specification:** `docs/AT-07-independent-verifier-spec.md`
 
 ### AT-08: Trace recorder
-**Depends on:** AT-02, AT-04, AT-05, AT-07
+**Depends on:** AT-02, AT-04, AT-05, AT-06, AT-07
 
 **Scope**
 - Record correlated proposals, policy decisions, approval outcomes, executions, and verification results.

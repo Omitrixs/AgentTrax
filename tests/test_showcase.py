@@ -250,3 +250,27 @@ def test_showcase_fails_when_task_verification_is_misassociated(
     report = showcase.run_showcase()
 
     assert report.passed is False
+
+
+
+def test_showcase_fails_when_unexpected_trace_event_is_present(
+    monkeypatch,
+) -> None:
+    original_get_events = TraceRecorder.get_events
+
+    def add_unexpected_event(self):
+        events = original_get_events(self)
+        unexpected_event = events[0].model_copy(
+            update={"action_id": "act-unexpected-999"}
+        )
+        return (*events, unexpected_event)
+
+    monkeypatch.setattr(
+        TraceRecorder,
+        "get_events",
+        add_unexpected_event,
+    )
+
+    report = showcase.run_showcase()
+
+    assert report.passed is False

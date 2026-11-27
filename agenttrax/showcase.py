@@ -418,6 +418,20 @@ def run_showcase() -> ShowcaseReport:
         == task_verification.status.value
     )
 
+    expected_action_ids = {
+        "act-showcase-001",
+        "act-showcase-002",
+        "act-showcase-003",
+        "act-showcase-004",
+    }
+
+    trace_events_valid = (
+        len(events) == 22
+        and all(
+            event.action_id is None or event.action_id in expected_action_ids
+            for event in events
+        )
+    )
 
     expected = (
         len(actions) == 4
@@ -437,6 +451,7 @@ def run_showcase() -> ShowcaseReport:
         and actions[3].verification_status == "VERIFIED_SUCCESS"
         and task_verification.status.value == "VERIFIED_SUCCESS"
         and final_state_valid
+        and trace_events_valid
         and blocked_trace_valid
         and refund_trace_valid
         and note_trace_valid

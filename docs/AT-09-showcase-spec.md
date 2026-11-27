@@ -245,6 +245,10 @@ hard-coded success message.
 - Fresh state isolation between runs.
 - Failure when an action verification is inconclusive.
 - Nonzero CLI exit behavior when the showcase fails.
+- Failure when a proposal trace is missing.
+- Failure when a lifecycle event is duplicated.
+- Failure when task verification is misassociated.
+- Failure when an unexpected trace event is present.
 
 ## 11. Validation
 
