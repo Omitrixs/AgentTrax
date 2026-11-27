@@ -15,7 +15,7 @@ from agenttrax.contracts.models import (
     PolicyReasonCode,
     check_lifecycle_consistency,
 )
-from agenttrax.execution.approval import ApprovalService
+from agenttrax.execution.approval import ApprovalService, ApprovalStatus
 from agenttrax.execution.executor import GatedToolExecutor
 from agenttrax.scenarios.order_support import (
     OperationErrorCode,
@@ -873,3 +873,31 @@ def test_approved_execution_fails_if_policy_changes(
     assert result.status is ExecutionStatus.NOT_EXECUTED
     assert result.not_executed_reason is NotExecutedReason.INTEGRITY_CHECK_FAILED
     assert executor.state.order.refunded_minor_units == 0
+
+
+
+def test_get_approval_status_returns_pending_and_approved_states(
+    executor: GatedToolExecutor,
+) -> None:
+    proposal = make_refund_proposal()
+    decision = evaluate_decision(executor, proposal)
+
+    approval_id = executor.request_approval(proposal, decision)
+
+    assert executor.get_approval_status(approval_id) is ApprovalStatus.PENDING
+
+    executor.approve(approval_id, "test-approver")
+
+    assert executor.get_approval_status(approval_id) is ApprovalStatus.APPROVED
+
+
+def test_get_approval_status_returns_denied_state(
+    executor: GatedToolExecutor,
+) -> None:
+    proposal = make_refund_proposal()
+    decision = evaluate_decision(executor, proposal)
+
+    approval_id = executor.request_approval(proposal, decision)
+    executor.deny(approval_id, "test-approver")
+
+    assert executor.get_approval_status(approval_id) is ApprovalStatus.DENIED

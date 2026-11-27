@@ -164,6 +164,10 @@ class GatedToolExecutor:
         """Deny a pending approval request."""
         self._approval_service.deny(approval_id, approver_id)
 
+    def get_approval_status(self, approval_id: str) -> ApprovalStatus:
+        """Return the current status of an approval request."""
+        return self._approval_service.get_status(approval_id)
+
     def execute_approved(self, approval_id: str) -> ExecutionResult:
         """Execute only the original proposal held by an approved request."""
         proposal, decision, status, evidence = (
